@@ -53,7 +53,42 @@
     </style>
 </head>
 <body>
-    <div id="firebase-app">
+<script>
+    document.getElementById('createRoomButton').addEventListener('click', () => {
+    const roomName = prompt('Enter a new room name:');
+    if (roomName) {
+        const roomRef = db.ref('rooms/' + roomName);
+        roomRef.set({
+            messages: {}
+        });
+        alert(`Room "${roomName}" created successfully!`);
+    }
+});
+</script>
+<div id="firebase-app">
+    <h2>Firebase Chat</h2>
+    
+    <!-- Room Input -->
+    <div class="room-input">
+        <label for="roomInput">Enter Room Code:</label>
+        <input type="text" id="roomInput" placeholder="e.g., myRoom123">
+        <button id="joinRoom">Join Room</button>
+        <!-- כפתור ליצירת חדר חדש -->
+        <button id="createRoomButton">Create New Room</button>
+    </div>
+
+    <!-- Chat Section -->
+    <div id="chatSection" style="display: none;">
+        <h3>Room: <span id="roomName"></span></h3>
+        <div id="messages"></div>
+        <div class="message-input">
+            <input type="text" id="messageInput" placeholder="Type your message">
+            <button id="sendMessage">Send</button>
+        </div>
+    </div>
+</div>
+    
+    <div id="firebase-app1">
         <h2>Firebase Chat - Version 1.1</h2>
 
         <!-- Room Search Section -->
