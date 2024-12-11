@@ -1,0 +1,134 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        #firebase-app {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #chatSection {
+            margin-top: 20px;
+        }
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin-bottom: 5px;
+        }
+        .message .sender {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="firebase-app">
+        <h2>Firebase Chat</h2>
+        
+        <!-- Room Input -->
+        <div class="room-input">
+            <label for="roomInput">Enter Room Code:</label>
+            <input type="text" id="roomInput" placeholder="e.g., myRoom123">
+            <button id="joinRoom">Join Room</button>
+        </div>
+
+        <!-- Chat Section -->
+        <div id="chatSection" style="display: none;">
+            <h3>Room: <span id="roomName"></span></h3>
+            <div id="messages"></div>
+            <div class="message-input">
+                <input type="text" id="messageInput" placeholder="Type your message">
+                <button id="sendMessage">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-database.js"></script>
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyB8FuavGI3hwuSN7ith-RB6LSBuFV6ctHk",
+            authDomain: "wix-chat-project.firebaseapp.com",
+            databaseURL: "https://wix-chat-project-default-rtdb.firebaseio.com",
+            projectId: "wix-chat-project",
+            storageBucket: "wix-chat-project.firebasestorage.app",
+            messagingSenderId: "660528665112",
+            appId: "1:660528665112:web:dd213e60545b2607a1696d",
+            measurementId: "G-LGTT117V8C"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.database(app);
+
+        // Global variables
+        let currentRoom = null;
+        let currentUser = null;
+
+        // Join Room
+        document.getElementById('joinRoom').addEventListener('click', () => {
+            const roomCode = document.getElementById('roomInput').value.trim();
+            if (roomCode) {
+                currentRoom = roomCode;
+                document.getElementById('chatSection').style.display = 'block';
+                document.getElementById('roomName').textContent = currentRoom;
+
+                // Set up message listener
+                const roomRef = db.ref('rooms/' + currentRoom + '/messages');
+                roomRef.on('child_added', (snapshot) => {
+                    const message = snapshot.val();
+                    addMessage(message.sender, message.content);
+                });
+            }
+        });
+
+        // Send Message
+        document.getElementById('sendMessage').addEventListener('click', () => {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            if (currentRoom && message) {
+                const roomRef = db.ref('rooms/' + currentRoom + '/messages');
+                roomRef.push({ sender: currentUser, content: message });
+                messageInput.value = '';
+            }
+        });
+
+        // Helper function to add a message to the chat
+        function addMessage(sender, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.innerHTML = `<span class="sender">${sender}:</span> ${content}`;
+            document.getElementById('messages').appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        // Helper function to scroll to the bottom of the chat
+        function scrollToBottom() {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Set the current user
+        currentUser = prompt('Please enter your name:') || 'Anonymous';
+    </script>
+</body>
+</html>
