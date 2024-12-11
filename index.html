@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firebase Chat</title>
+    <title>Firebase Chat - Version 1.1</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -35,22 +35,40 @@
         .message .sender {
             font-weight: bold;
         }
-        .error {
-            color: red;
+        #availableRooms {
             margin-top: 10px;
+            list-style-type: none;
+            padding: 0;
+        }
+        #availableRooms li {
+            padding: 10px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+        #availableRooms li:hover {
+            background: #e9e9e9;
         }
     </style>
 </head>
 <body>
     <div id="firebase-app">
-        <h2>Firebase Chat</h2>
+        <h2>Firebase Chat - Version 1.1</h2>
 
+        <!-- Room Search Section -->
+        <div>
+            <h3>Available Rooms</h3>
+            <ul id="availableRooms">
+                <li>Loading...</li>
+            </ul>
+        </div>
+        
         <!-- Room Input -->
         <div class="room-input">
             <label for="roomInput">Enter Room Code:</label>
             <input type="text" id="roomInput" placeholder="e.g., myRoom123">
             <button id="joinRoom">Join Room</button>
-            <div id="joinError" class="error"></div>
         </div>
 
         <!-- Chat Section -->
@@ -60,7 +78,6 @@
             <div class="message-input">
                 <input type="text" id="messageInput" placeholder="Type your message">
                 <button id="sendMessage">Send</button>
-                <div id="sendError" class="error"></div>
             </div>
         </div>
     </div>
@@ -89,56 +106,58 @@
         let currentRoom = null;
         let currentUser = null;
 
+        // Fetch available rooms
+        const availableRoomsList = document.getElementById('availableRooms');
+        const roomsRef = db.ref('rooms');
+        roomsRef.on('value', (snapshot) => {
+            const rooms = snapshot.val();
+            availableRoomsList.innerHTML = ''; // Clear the list
+            if (rooms) {
+                Object.keys(rooms).forEach((room) => {
+                    const li = document.createElement('li');
+                    li.textContent = room;
+                    li.addEventListener('click', () => {
+                        document.getElementById('roomInput').value = room;
+                    });
+                    availableRoomsList.appendChild(li);
+                });
+            } else {
+                availableRoomsList.innerHTML = '<li>No rooms available</li>';
+            }
+        });
+
         // Join Room
         document.getElementById('joinRoom').addEventListener('click', () => {
             const roomCode = document.getElementById('roomInput').value.trim();
-            const joinError = document.getElementById('joinError');
-            joinError.textContent = '';
+            if (roomCode) {
+                currentRoom = roomCode;
+                document.getElementById('chatSection').style.display = 'block';
+                document.getElementById('roomName').textContent = currentRoom;
 
-            if (!roomCode) {
-                joinError.textContent = 'Room code cannot be empty.';
-                return;
+                // Set up message listener
+                const roomRef = db.ref('rooms/' + currentRoom + '/messages');
+                roomRef.on('child_added', (snapshot) => {
+                    const message = snapshot.val();
+                    addMessage(message.sender, message.content);
+                });
+            } else {
+                alert('Please enter a valid room code.');
             }
-
-            currentRoom = roomCode;
-            document.getElementById('chatSection').style.display = 'block';
-            document.getElementById('roomName').textContent = currentRoom;
-
-            // Set up message listener
-            const roomRef = db.ref('rooms/' + currentRoom + '/messages');
-            roomRef.on('child_added', (snapshot) => {
-                const message = snapshot.val();
-                addMessage(message.sender, message.content);
-            }, (error) => {
-                joinError.textContent = 'Error joining room: ' + error.message;
-            });
         });
 
         // Send Message
         document.getElementById('sendMessage').addEventListener('click', () => {
             const messageInput = document.getElementById('messageInput');
-            const sendError = document.getElementById('sendError');
-            sendError.textContent = '';
-
             const message = messageInput.value.trim();
-            if (!currentRoom) {
-                sendError.textContent = 'You must join a room first.';
-                return;
+            if (currentRoom && message) {
+                const roomRef = db.ref('rooms/' + currentRoom + '/messages');
+                roomRef.push({ sender: currentUser, content: message });
+                messageInput.value = '';
+            } else if (!currentRoom) {
+                alert('Please join a room first.');
+            } else {
+                alert('Message cannot be empty.');
             }
-
-            if (!message) {
-                sendError.textContent = 'Message cannot be empty.';
-                return;
-            }
-
-            const roomRef = db.ref('rooms/' + currentRoom + '/messages');
-            roomRef.push({ sender: currentUser, content: message }, (error) => {
-                if (error) {
-                    sendError.textContent = 'Error sending message: ' + error.message;
-                } else {
-                    messageInput.value = '';
-                }
-            });
         });
 
         // Helper function to add a message to the chat
