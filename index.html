@@ -84,12 +84,11 @@
     </div>
 
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-database.js"></script>
-    <!-- Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
-    <script>
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getDatabase, ref, set, push, onValue } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js';
+
         // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyB8FuavGI3hwuSN7ith-RB6LSBuFV6ctHk",
@@ -102,33 +101,36 @@
             measurementId: "G-LGTT117V8C"
         };
 
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
         // Supabase Configuration
         const supabaseUrl = "https://qmkcaefbboenlojpedax.supabase.co";
         const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFta2NhZWZiYm9lbmxvanBlZGF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk5OTU2NzcsImV4cCI6MjA1NTU3MTY3N30.yrkk9dxehl0HH4JqYEMQEE9I7bjPVu_f9xCFTqydwCM";
         
-        // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const db = firebase.database(app);
-
         // Initialize Supabase
-        const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        const supabase = supabaseClient.createClient(supabaseUrl, supabaseAnonKey);
 
         // Global variables
         let currentRoom = null;
         let currentUser = null;
+
+        // Set the current user
+        currentUser = prompt('Please enter your name:') || 'Anonymous';
 
         // Create Room function
         document.getElementById('createRoomButton').addEventListener('click', async () => {
             const roomName = prompt('Enter a new room name:');
             if (roomName) {
                 // Create room in Firebase
-                const roomRef = db.ref('rooms/' + roomName);
-                await roomRef.set({
-                    messages: {}
-                });
-
-                // Create room in Supabase
+                const roomRef = ref(db, 'rooms/' + roomName);
                 try {
+                    await set(roomRef, {
+                        messages: {}
+                    });
+
+                    // Create room in Supabase
                     const { data, error } = await supabase
                         .from('rooms')
                         .insert([
@@ -138,15 +140,16 @@
                     if (error) throw error;
                     alert(`Room "${roomName}" created successfully!`);
                 } catch (error) {
-                    console.error('Error creating room in Supabase:', error);
+                    console.error('Error creating room:', error);
+                    alert('Error creating room. Please try again.');
                 }
             }
         });
 
         // Fetch available rooms
         const availableRoomsList = document.getElementById('availableRooms');
-        const roomsRef = db.ref('rooms');
-        roomsRef.on('value', (snapshot) => {
+        const roomsRef = ref(db, 'rooms');
+        onValue(roomsRef, (snapshot) => {
             const rooms = snapshot.val();
             availableRoomsList.innerHTML = '';
             if (rooms) {
@@ -172,15 +175,19 @@
                 document.getElementById('roomName').textContent = currentRoom;
 
                 // Set up Firebase message listener
-                const roomRef = db.ref('rooms/' + currentRoom + '/messages');
-                roomRef.on('child_added', (snapshot) => {
-                    const message = snapshot.val();
-                    addMessage(message.sender, message.content);
+                const roomRef = ref(db, 'rooms/' + currentRoom + '/messages');
+                onValue(roomRef, (snapshot) => {
+                    const messages = snapshot.val();
+                    if (messages) {
+                        Object.values(messages).forEach((message) => {
+                            addMessage(message.sender, message.content);
+                        });
+                    }
                 });
 
                 // Log room join in Supabase
                 try {
-                    const { data, error } = await supabase
+                    const { error } = await supabase
                         .from('room_activity')
                         .insert([
                             { 
@@ -193,7 +200,7 @@
                     
                     if (error) throw error;
                 } catch (error) {
-                    console.error('Error logging room join in Supabase:', error);
+                    console.error('Error logging room join:', error);
                 }
             } else {
                 alert('Please enter a valid room code.');
@@ -205,14 +212,14 @@
             const messageInput = document.getElementById('messageInput');
             const message = messageInput.value.trim();
             if (currentRoom && message) {
-                // Send message to Firebase
-                const roomRef = db.ref('rooms/' + currentRoom + '/messages');
-                const newMessage = { sender: currentUser, content: message };
-                await roomRef.push(newMessage);
-
-                // Log message in Supabase
                 try {
-                    const { data, error } = await supabase
+                    // Send message to Firebase
+                    const roomRef = ref(db, 'rooms/' + currentRoom + '/messages');
+                    const newMessage = { sender: currentUser, content: message };
+                    await push(roomRef, newMessage);
+
+                    // Log message in Supabase
+                    const { error } = await supabase
                         .from('messages')
                         .insert([
                             {
@@ -224,11 +231,11 @@
                         ]);
                     
                     if (error) throw error;
+                    messageInput.value = '';
                 } catch (error) {
-                    console.error('Error logging message in Supabase:', error);
+                    console.error('Error sending message:', error);
+                    alert('Error sending message. Please try again.');
                 }
-
-                messageInput.value = '';
             } else if (!currentRoom) {
                 alert('Please join a room first.');
             } else {
@@ -250,9 +257,9 @@
             const messagesDiv = document.getElementById('messages');
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-
-        // Set the current user
-        currentUser = prompt('Please enter your name:') || 'Anonymous';
     </script>
+
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </body>
 </html>
