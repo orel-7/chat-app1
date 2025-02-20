@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase & Supabase Chat - Version 1.2</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        #firebase-app {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #chatSection {
+            margin-top: 20px;
+        }
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin-bottom: 5px;
+        }
+        .message .sender {
+            font-weight: bold;
+        }
+        #availableRooms {
+            margin-top: 10px;
+            list-style-type: none;
+            padding: 0;
+        }
+        #availableRooms li {
+            padding: 10px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+        #availableRooms li:hover {
+            background: #e9e9e9;
+        }
+    </style>
+</head>
+<body>
+    <div id="firebase-app">
+        <h2>Firebase & Supabase Chat</h2>
+        
+        <!-- Room Input -->
+        <div class="room-input">
+            <label for="roomInput">Enter Room Code:</label>
+            <input type="text" id="roomInput" placeholder="e.g., myRoom123">
+            <button id="joinRoom">Join Room</button>
+            <button id="createRoomButton">Create New Room</button>
+        </div>
+
+        <!-- Room Search Section -->
+        <div>
+            <h3>Available Rooms</h3>
+            <ul id="availableRooms">
+                <li>Loading...</li>
+            </ul>
+        </div>
+
+        <!-- Chat Section -->
+        <div id="chatSection" style="display: none;">
+            <h3>Room: <span id="roomName"></span></h3>
+            <div id="messages"></div>
+            <div class="message-input">
+                <input type="text" id="messageInput" placeholder="Type your message">
+                <button id="sendMessage">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-database.js"></script>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyB8FuavGI3hwuSN7ith-RB6LSBuFV6ctHk",
+            authDomain: "wix-chat-project.firebaseapp.com",
+            databaseURL: "https://wix-chat-project-default-rtdb.firebaseio.com",
+            projectId: "wix-chat-project",
+            storageBucket: "wix-chat-project.firebasestorage.app",
+            messagingSenderId: "660528665112",
+            appId: "1:660528665112:web:dd213e60545b2607a1696d",
+            measurementId: "G-LGTT117V8C"
+        };
+
+        // Supabase Configuration
+        const supabaseUrl = "https://qmkcaefbboenlojpedax.supabase.co";
+        const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFta2NhZWZiYm9lbmxvanBlZGF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk5OTU2NzcsImV4cCI6MjA1NTU3MTY3N30.yrkk9dxehl0HH4JqYEMQEE9I7bjPVu_f9xCFTqydwCM";
+        
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.database(app);
+
+        // Initialize Supabase
+        const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        // Global variables
+        let currentRoom = null;
+        let currentUser = null;
+
+        // Create Room function
+        document.getElementById('createRoomButton').addEventListener('click', async () => {
+            const roomName = prompt('Enter a new room name:');
+            if (roomName) {
+                // Create room in Firebase
+                const roomRef = db.ref('rooms/' + roomName);
+                await roomRef.set({
+                    messages: {}
+                });
+
+                // Create room in Supabase
+                try {
+                    const { data, error } = await supabase
+                        .from('rooms')
+                        .insert([
+                            { room_name: roomName, created_at: new Date().toISOString() }
+                        ]);
+                    
+                    if (error) throw error;
+                    alert(`Room "${roomName}" created successfully!`);
+                } catch (error) {
+                    console.error('Error creating room in Supabase:', error);
+                }
+            }
+        });
+
+        // Fetch available rooms
+        const availableRoomsList = document.getElementById('availableRooms');
+        const roomsRef = db.ref('rooms');
+        roomsRef.on('value', (snapshot) => {
+            const rooms = snapshot.val();
+            availableRoomsList.innerHTML = '';
+            if (rooms) {
+                Object.keys(rooms).forEach((room) => {
+                    const li = document.createElement('li');
+                    li.textContent = room;
+                    li.addEventListener('click', () => {
+                        document.getElementById('roomInput').value = room;
+                    });
+                    availableRoomsList.appendChild(li);
+                });
+            } else {
+                availableRoomsList.innerHTML = '<li>No rooms available</li>';
+            }
+        });
+
+        // Join Room
+        document.getElementById('joinRoom').addEventListener('click', async () => {
+            const roomCode = document.getElementById('roomInput').value.trim();
+            if (roomCode) {
+                currentRoom = roomCode;
+                document.getElementById('chatSection').style.display = 'block';
+                document.getElementById('roomName').textContent = currentRoom;
+
+                // Set up Firebase message listener
+                const roomRef = db.ref('rooms/' + currentRoom + '/messages');
+                roomRef.on('child_added', (snapshot) => {
+                    const message = snapshot.val();
+                    addMessage(message.sender, message.content);
+                });
+
+                // Log room join in Supabase
+                try {
+                    const { data, error } = await supabase
+                        .from('room_activity')
+                        .insert([
+                            { 
+                                room_name: currentRoom, 
+                                user_name: currentUser,
+                                action: 'join',
+                                timestamp: new Date().toISOString()
+                            }
+                        ]);
+                    
+                    if (error) throw error;
+                } catch (error) {
+                    console.error('Error logging room join in Supabase:', error);
+                }
+            } else {
+                alert('Please enter a valid room code.');
+            }
+        });
+
+        // Send Message
+        document.getElementById('sendMessage').addEventListener('click', async () => {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            if (currentRoom && message) {
+                // Send message to Firebase
+                const roomRef = db.ref('rooms/' + currentRoom + '/messages');
+                const newMessage = { sender: currentUser, content: message };
+                await roomRef.push(newMessage);
+
+                // Log message in Supabase
+                try {
+                    const { data, error } = await supabase
+                        .from('messages')
+                        .insert([
+                            {
+                                room_name: currentRoom,
+                                user_name: currentUser,
+                                content: message,
+                                sent_at: new Date().toISOString()
+                            }
+                        ]);
+                    
+                    if (error) throw error;
+                } catch (error) {
+                    console.error('Error logging message in Supabase:', error);
+                }
+
+                messageInput.value = '';
+            } else if (!currentRoom) {
+                alert('Please join a room first.');
+            } else {
+                alert('Message cannot be empty.');
+            }
+        });
+
+        // Helper function to add a message to the chat
+        function addMessage(sender, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.innerHTML = `<span class="sender">${sender}:</span> ${content}`;
+            document.getElementById('messages').appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        // Helper function to scroll to the bottom of the chat
+        function scrollToBottom() {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Set the current user
+        currentUser = prompt('Please enter your name:') || 'Anonymous';
+    </script>
+</body>
+</html>
