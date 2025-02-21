@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firebase & Supabase Chat - Version 1.2</title>
+    <title>Supabase Chat</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,7 +11,7 @@
             margin: 0;
             padding: 20px;
         }
-        #firebase-app {
+        #chat-app {
             max-width: 600px;
             margin: 0 auto;
             background-color: white;
@@ -31,9 +31,18 @@
         }
         .message {
             margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
         }
         .message .sender {
             font-weight: bold;
+            color: #0066cc;
+        }
+        .message .time {
+            font-size: 0.8em;
+            color: #666;
+            margin-left: 10px;
         }
         #availableRooms {
             margin-top: 10px;
@@ -46,20 +55,39 @@
             border: 1px solid #ddd;
             margin-bottom: 5px;
             cursor: pointer;
+            border-radius: 4px;
         }
         #availableRooms li:hover {
             background: #e9e9e9;
         }
+        .room-input {
+            margin-bottom: 20px;
+        }
+        input, button {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
     </style>
 </head>
 <body>
-    <div id="firebase-app">
-        <h2>Firebase & Supabase Chat</h2>
+    <div id="chat-app">
+        <h2>Supabase Chat</h2>
         
         <!-- Room Input -->
         <div class="room-input">
-            <label for="roomInput">Enter Room Code:</label>
-            <input type="text" id="roomInput" placeholder="e.g., myRoom123">
+            <label for="roomInput">Enter Room Name:</label>
+            <input type="text" id="roomInput" placeholder="e.g., General Chat">
             <button id="joinRoom">Join Room</button>
             <button id="createRoomButton">Create New Room</button>
         </div>
@@ -83,62 +111,75 @@
         </div>
     </div>
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        // Import Firebase functions
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-        import { getDatabase, ref, set, push, onValue } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js';
-
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyB8FuavGI3hwuSN7ith-RB6LSBuFV6ctHk",
-            authDomain: "wix-chat-project.firebaseapp.com",
-            databaseURL: "https://wix-chat-project-default-rtdb.firebaseio.com",
-            projectId: "wix-chat-project",
-            storageBucket: "wix-chat-project.firebasestorage.app",
-            messagingSenderId: "660528665112",
-            appId: "1:660528665112:web:dd213e60545b2607a1696d",
-            measurementId: "G-LGTT117V8C"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
         // Supabase Configuration
         const supabaseUrl = "https://qmkcaefbboenlojpedax.supabase.co";
         const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFta2NhZWZiYm9lbmxvanBlZGF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk5OTU2NzcsImV4cCI6MjA1NTU3MTY3N30.yrkk9dxehl0HH4JqYEMQEE9I7bjPVu_f9xCFTqydwCM";
         
         // Initialize Supabase
-        const supabase = supabaseClient.createClient(supabaseUrl, supabaseAnonKey);
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
         // Global variables
         let currentRoom = null;
+        let currentRoomId = null;
         let currentUser = null;
+        let messageSubscription = null;
 
         // Set the current user
         currentUser = prompt('Please enter your name:') || 'Anonymous';
+
+        // Function to load available rooms
+        async function loadRooms() {
+            try {
+                const { data: rooms, error } = await supabase
+                    .from('rooms')
+                    .select('id, name');
+                
+                if (error) throw error;
+
+                const availableRoomsList = document.getElementById('availableRooms');
+                availableRoomsList.innerHTML = '';
+                
+                if (rooms && rooms.length > 0) {
+                    rooms.forEach(room => {
+                        const li = document.createElement('li');
+                        li.textContent = room.name;
+                        li.dataset.roomId = room.id;
+                        li.addEventListener('click', () => {
+                            document.getElementById('roomInput').value = room.name;
+                        });
+                        availableRoomsList.appendChild(li);
+                    });
+                } else {
+                    availableRoomsList.innerHTML = '<li>No rooms available</li>';
+                }
+            } catch (error) {
+                console.error('Error loading rooms:', error);
+                alert('Error loading rooms. Please try again.');
+            }
+        }
+
+        // Load rooms initially
+        loadRooms();
 
         // Create Room function
         document.getElementById('createRoomButton').addEventListener('click', async () => {
             const roomName = prompt('Enter a new room name:');
             if (roomName) {
-                // Create room in Firebase
-                const roomRef = ref(db, 'rooms/' + roomName);
                 try {
-                    await set(roomRef, {
-                        messages: {}
-                    });
-
-                    // Create room in Supabase
                     const { data, error } = await supabase
                         .from('rooms')
-                        .insert([
-                            { room_name: roomName, created_at: new Date().toISOString() }
-                        ]);
+                        .insert([{ name: roomName }])
+                        .select()
+                        .single();
                     
                     if (error) throw error;
+                    
                     alert(`Room "${roomName}" created successfully!`);
+                    loadRooms();
                 } catch (error) {
                     console.error('Error creating room:', error);
                     alert('Error creating room. Please try again.');
@@ -146,64 +187,69 @@
             }
         });
 
-        // Fetch available rooms
-        const availableRoomsList = document.getElementById('availableRooms');
-        const roomsRef = ref(db, 'rooms');
-        onValue(roomsRef, (snapshot) => {
-            const rooms = snapshot.val();
-            availableRoomsList.innerHTML = '';
-            if (rooms) {
-                Object.keys(rooms).forEach((room) => {
-                    const li = document.createElement('li');
-                    li.textContent = room;
-                    li.addEventListener('click', () => {
-                        document.getElementById('roomInput').value = room;
-                    });
-                    availableRoomsList.appendChild(li);
-                });
-            } else {
-                availableRoomsList.innerHTML = '<li>No rooms available</li>';
+        // Subscribe to real-time messages
+        async function subscribeToMessages(roomId) {
+            if (messageSubscription) {
+                messageSubscription.unsubscribe();
             }
-        });
+
+            messageSubscription = supabase
+                .channel('messages')
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `room_id=eq.${roomId}`
+                }, payload => {
+                    addMessage(payload.new.user_name, payload.new.content, new Date(payload.new.created_at));
+                })
+                .subscribe();
+        }
 
         // Join Room
         document.getElementById('joinRoom').addEventListener('click', async () => {
-            const roomCode = document.getElementById('roomInput').value.trim();
-            if (roomCode) {
-                currentRoom = roomCode;
-                document.getElementById('chatSection').style.display = 'block';
-                document.getElementById('roomName').textContent = currentRoom;
-
-                // Set up Firebase message listener
-                const roomRef = ref(db, 'rooms/' + currentRoom + '/messages');
-                onValue(roomRef, (snapshot) => {
-                    const messages = snapshot.val();
-                    if (messages) {
-                        Object.values(messages).forEach((message) => {
-                            addMessage(message.sender, message.content);
-                        });
-                    }
-                });
-
-                // Log room join in Supabase
+            const roomName = document.getElementById('roomInput').value.trim();
+            if (roomName) {
                 try {
-                    const { error } = await supabase
-                        .from('room_activity')
-                        .insert([
-                            { 
-                                room_name: currentRoom, 
-                                user_name: currentUser,
-                                action: 'join',
-                                timestamp: new Date().toISOString()
-                            }
-                        ]);
-                    
-                    if (error) throw error;
+                    // Check if room exists
+                    const { data: room, error } = await supabase
+                        .from('rooms')
+                        .select('id, name')
+                        .eq('name', roomName)
+                        .single();
+
+                    if (error || !room) {
+                        throw new Error('Room not found');
+                    }
+
+                    currentRoom = room.name;
+                    currentRoomId = room.id;
+                    document.getElementById('chatSection').style.display = 'block';
+                    document.getElementById('roomName').textContent = currentRoom;
+                    document.getElementById('messages').innerHTML = '';
+
+                    // Load existing messages
+                    const { data: messages, error: messagesError } = await supabase
+                        .from('messages')
+                        .select('*')
+                        .eq('room_id', currentRoomId)
+                        .order('created_at', { ascending: true });
+
+                    if (messagesError) throw messagesError;
+
+                    messages.forEach(message => {
+                        addMessage(message.user_name, message.content, new Date(message.created_at));
+                    });
+
+                    // Subscribe to new messages
+                    subscribeToMessages(currentRoomId);
+
                 } catch (error) {
-                    console.error('Error logging room join:', error);
+                    console.error('Error joining room:', error);
+                    alert('Error joining room. Please check if the room exists.');
                 }
             } else {
-                alert('Please enter a valid room code.');
+                alert('Please enter a valid room name.');
             }
         });
 
@@ -211,22 +257,15 @@
         document.getElementById('sendMessage').addEventListener('click', async () => {
             const messageInput = document.getElementById('messageInput');
             const message = messageInput.value.trim();
-            if (currentRoom && message) {
+            if (currentRoomId && message) {
                 try {
-                    // Send message to Firebase
-                    const roomRef = ref(db, 'rooms/' + currentRoom + '/messages');
-                    const newMessage = { sender: currentUser, content: message };
-                    await push(roomRef, newMessage);
-
-                    // Log message in Supabase
                     const { error } = await supabase
                         .from('messages')
                         .insert([
                             {
-                                room_name: currentRoom,
+                                room_id: currentRoomId,
                                 user_name: currentUser,
-                                content: message,
-                                sent_at: new Date().toISOString()
+                                content: message
                             }
                         ]);
                     
@@ -236,7 +275,7 @@
                     console.error('Error sending message:', error);
                     alert('Error sending message. Please try again.');
                 }
-            } else if (!currentRoom) {
+            } else if (!currentRoomId) {
                 alert('Please join a room first.');
             } else {
                 alert('Message cannot be empty.');
@@ -244,11 +283,16 @@
         });
 
         // Helper function to add a message to the chat
-        function addMessage(sender, content) {
+        function addMessage(sender, content, timestamp) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message');
-            messageDiv.innerHTML = `<span class="sender">${sender}:</span> ${content}`;
-            document.getElementById('messages').appendChild(messageDiv);
+            messageDiv.innerHTML = `
+                <span class="sender">${sender}:</span> 
+                ${content}
+                <span class="time">${timestamp.toLocaleTimeString()}</span>
+            `;
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.appendChild(messageDiv);
             scrollToBottom();
         }
 
@@ -257,9 +301,13 @@
             const messagesDiv = document.getElementById('messages');
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-    </script>
 
-    <!-- Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        // Add message input on Enter key
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('sendMessage').click();
+            }
+        });
+    </script>
 </body>
 </html>
