@@ -1,313 +1,100 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supabase Chat</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-            margin: 0;
-            padding: 20px;
-        }
-        #chat-app {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-        #chatSection {
-            margin-top: 20px;
-        }
-        #messages {
-            height: 300px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-        .message {
-            margin-bottom: 5px;
-            padding: 5px;
-            border-radius: 4px;
-            background-color: #f8f9fa;
-        }
-        .message .sender {
-            font-weight: bold;
-            color: #0066cc;
-        }
-        .message .time {
-            font-size: 0.8em;
-            color: #666;
-            margin-left: 10px;
-        }
-        #availableRooms {
-            margin-top: 10px;
-            list-style-type: none;
-            padding: 0;
-        }
-        #availableRooms li {
-            padding: 10px;
-            background: #f9f9f9;
-            border: 1px solid #ddd;
-            margin-bottom: 5px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        #availableRooms li:hover {
-            background: #e9e9e9;
-        }
-        .room-input {
-            margin-bottom: 20px;
-        }
-        input, button {
-            padding: 8px;
-            margin: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #0066cc;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0052a3;
-        }
-    </style>
-</head>
-<body>
-    <div id="chat-app">
-        <h2>Supabase Chat</h2>
-        
-        <!-- Room Input -->
-        <div class="room-input">
-            <label for="roomInput">Enter Room Name:</label>
-            <input type="text" id="roomInput" placeholder="e.g., General Chat">
-            <button id="joinRoom">Join Room</button>
-            <button id="createRoomButton">Create New Room</button>
-        </div>
-
-        <!-- Room Search Section -->
-        <div>
-            <h3>Available Rooms</h3>
-            <ul id="availableRooms">
-                <li>Loading...</li>
-            </ul>
-        </div>
-
-        <!-- Chat Section -->
-        <div id="chatSection" style="display: none;">
-            <h3>Room: <span id="roomName"></span></h3>
-            <div id="messages"></div>
-            <div class="message-input">
-                <input type="text" id="messageInput" placeholder="Type your message">
-                <button id="sendMessage">Send</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    // Supabase Configuration
+    const supabaseUrl = "https://qmkcaefbboenlojpedax.supabase.co";
+    const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
     
-    <script>
-        // Supabase Configuration
-        const supabaseUrl = "https://qmkcaefbboenlojpedax.supabase.co";
-        const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFta2NhZWZiYm9lbmxvanBlZGF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk5OTU2NzcsImV4cCI6MjA1NTU3MTY3N30.yrkk9dxehl0HH4JqYEMQEE9I7bjPVu_f9xCFTqydwCM";
-        
-        // Initialize Supabase
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-        // Global variables
-        let currentRoom = null;
-        let currentRoomId = null;
-        let currentUser = null;
-        let messageSubscription = null;
+    let currentRoomId = null;
+    let currentUser = prompt('Please enter your name:') || 'Anonymous';
+    let messageSubscription = null;
 
-        // Set the current user
-        currentUser = prompt('Please enter your name:') || 'Anonymous';
+    // Load available rooms
+    async function loadRooms() {
+        const { data: rooms, error } = await supabase.from('rooms').select('id, name');
+        const availableRoomsList = document.getElementById('availableRooms');
+        availableRoomsList.innerHTML = '';
 
-        // Function to load available rooms
-        async function loadRooms() {
-            try {
-                const { data: rooms, error } = await supabase
-                    .from('rooms')
-                    .select('id, name');
-                
-                if (error) throw error;
-
-                const availableRoomsList = document.getElementById('availableRooms');
-                availableRoomsList.innerHTML = '';
-                
-                if (rooms && rooms.length > 0) {
-                    rooms.forEach(room => {
-                        const li = document.createElement('li');
-                        li.textContent = room.name;
-                        li.dataset.roomId = room.id;
-                        li.addEventListener('click', () => {
-                            document.getElementById('roomInput').value = room.name;
-                        });
-                        availableRoomsList.appendChild(li);
-                    });
-                } else {
-                    availableRoomsList.innerHTML = '<li>No rooms available</li>';
-                }
-            } catch (error) {
-                console.error('Error loading rooms:', error);
-                alert('Error loading rooms. Please try again.');
-            }
+        if (rooms && rooms.length > 0) {
+            rooms.forEach(room => {
+                const li = document.createElement('li');
+                li.textContent = room.name;
+                li.dataset.roomId = room.id;
+                li.addEventListener('click', () => {
+                    document.getElementById('roomInput').value = room.name;
+                });
+                availableRoomsList.appendChild(li);
+            });
+        } else {
+            availableRoomsList.innerHTML = '<li>No rooms available</li>';
         }
+    }
 
-        // Load rooms initially
-        loadRooms();
+    loadRooms();
 
-        // Create Room function
-        document.getElementById('createRoomButton').addEventListener('click', async () => {
-            const roomName = prompt('Enter a new room name:');
-            if (roomName) {
-                try {
-                    const { data, error } = await supabase
-                        .from('rooms')
-                        .insert([{ name: roomName }])
-                        .select()
-                        .single();
-                    
-                    if (error) throw error;
-                    
-                    alert(`Room "${roomName}" created successfully!`);
-                    loadRooms();
-                } catch (error) {
-                    console.error('Error creating room:', error);
-                    alert('Error creating room. Please try again.');
-                }
-            }
-        });
+    // Join Room
+    document.getElementById('joinRoom').addEventListener('click', async () => {
+        const roomName = document.getElementById('roomInput').value.trim();
+        if (!roomName) return alert('Please enter a valid room name.');
+
+        const { data: room, error } = await supabase.from('rooms').select('id, name').eq('name', roomName).single();
+        if (error || !room) return alert('Room not found.');
+
+        currentRoomId = room.id;
+        document.getElementById('chatSection').style.display = 'block';
+        document.getElementById('roomName').textContent = room.name;
+        document.getElementById('messages').innerHTML = '';
+
+        // Load existing messages
+        const { data: messages, error: messagesError } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('room_id', currentRoomId)
+            .order('created_at', { ascending: true });
+
+        if (messagesError) console.error(messagesError);
+
+        messages.forEach(msg => addMessage(msg.user_name, msg.content, new Date(msg.created_at)));
 
         // Subscribe to real-time messages
-        async function subscribeToMessages(roomId) {
-            if (messageSubscription) {
-                messageSubscription.unsubscribe();
-            }
+        subscribeToMessages();
+    });
 
-            messageSubscription = supabase
-                .channel('messages')
-                .on('postgres_changes', {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages',
-                    filter: `room_id=eq.${roomId}`
-                }, payload => {
+    // Subscribe to messages in real-time
+    function subscribeToMessages() {
+        if (messageSubscription) messageSubscription.unsubscribe(); // Unsubscribe previous
+
+        messageSubscription = supabase
+            .from('messages')
+            .on('INSERT', payload => {
+                if (payload.new.room_id === currentRoomId) {
                     addMessage(payload.new.user_name, payload.new.content, new Date(payload.new.created_at));
-                })
-                .subscribe();
-        }
-
-        // Join Room
-        document.getElementById('joinRoom').addEventListener('click', async () => {
-            const roomName = document.getElementById('roomInput').value.trim();
-            if (roomName) {
-                try {
-                    // Check if room exists
-                    const { data: room, error } = await supabase
-                        .from('rooms')
-                        .select('id, name')
-                        .eq('name', roomName)
-                        .single();
-
-                    if (error || !room) {
-                        throw new Error('Room not found');
-                    }
-
-                    currentRoom = room.name;
-                    currentRoomId = room.id;
-                    document.getElementById('chatSection').style.display = 'block';
-                    document.getElementById('roomName').textContent = currentRoom;
-                    document.getElementById('messages').innerHTML = '';
-
-                    // Load existing messages
-                    const { data: messages, error: messagesError } = await supabase
-                        .from('messages')
-                        .select('*')
-                        .eq('room_id', currentRoomId)
-                        .order('created_at', { ascending: true });
-
-                    if (messagesError) throw messagesError;
-
-                    messages.forEach(message => {
-                        addMessage(message.user_name, message.content, new Date(message.created_at));
-                    });
-
-                    // Subscribe to new messages
-                    subscribeToMessages(currentRoomId);
-
-                } catch (error) {
-                    console.error('Error joining room:', error);
-                    alert('Error joining room. Please check if the room exists.');
                 }
-            } else {
-                alert('Please enter a valid room name.');
-            }
-        });
+            })
+            .subscribe();
+    }
 
-        // Send Message
-        document.getElementById('sendMessage').addEventListener('click', async () => {
-            const messageInput = document.getElementById('messageInput');
-            const message = messageInput.value.trim();
-            if (currentRoomId && message) {
-                try {
-                    const { error } = await supabase
-                        .from('messages')
-                        .insert([
-                            {
-                                room_id: currentRoomId,
-                                user_name: currentUser,
-                                content: message
-                            }
-                        ]);
-                    
-                    if (error) throw error;
-                    messageInput.value = '';
-                } catch (error) {
-                    console.error('Error sending message:', error);
-                    alert('Error sending message. Please try again.');
-                }
-            } else if (!currentRoomId) {
-                alert('Please join a room first.');
-            } else {
-                alert('Message cannot be empty.');
-            }
-        });
+    // Send Message
+    document.getElementById('sendMessage').addEventListener('click', async () => {
+        const messageInput = document.getElementById('messageInput');
+        const message = messageInput.value.trim();
+        if (!currentRoomId || !message) return alert('Please join a room and type a message.');
 
-        // Helper function to add a message to the chat
-        function addMessage(sender, content, timestamp) {
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message');
-            messageDiv.innerHTML = `
-                <span class="sender">${sender}:</span> 
-                ${content}
-                <span class="time">${timestamp.toLocaleTimeString()}</span>
-            `;
-            const messagesDiv = document.getElementById('messages');
-            messagesDiv.appendChild(messageDiv);
-            scrollToBottom();
-        }
+        const { error } = await supabase.from('messages').insert([
+            { room_id: currentRoomId, user_name: currentUser, content: message }
+        ]);
 
-        // Helper function to scroll to the bottom of the chat
-        function scrollToBottom() {
-            const messagesDiv = document.getElementById('messages');
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
+        if (error) console.error(error);
+        messageInput.value = '';
+    });
 
-        // Add message input on Enter key
-        document.getElementById('messageInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('sendMessage').click();
-            }
-        });
-    </script>
-</body>
-</html>
+    // Helper function to add a message to the chat
+    function addMessage(sender, content, timestamp) {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message');
+        messageDiv.innerHTML = `<span class="sender">${sender}:</span> ${content} <span class="time">${timestamp.toLocaleTimeString()}</span>`;
+        const messagesDiv = document.getElementById('messages');
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
+    }
+</script>
